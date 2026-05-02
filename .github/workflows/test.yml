@@ -7,6 +7,9 @@ on:
     branches: [main]
 
 jobs:
+  # ==============================
+  # JOB 1: Run Tests
+  # ==============================
   test:
     runs-on: ubuntu-latest
 
@@ -26,9 +29,12 @@ jobs:
       - name: Run tests
         run: npm test
 
+  # ==============================
+  # JOB 2: Build Project
+  # ==============================
   build:
     runs-on: ubuntu-latest
-    needs: test  # بيتشغل بس لو الـ tests نجحت
+    needs: test
 
     steps:
       - name: Checkout code
@@ -45,3 +51,79 @@ jobs:
 
       - name: Build project
         run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-output
+          path: ./dist
+
+  # ==============================
+  # JOB 3: Deploy with PM2
+  # ==============================
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to Windows Server via SSH + PM2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          script: |
+            echo "=========================================="
+            echo "  Starting Deployment..."
+            echo "=========================================="
+
+            # Go to project folder
+            cd C:\projects\your-app
+
+            # Pull latest code
+            echo "[1/5] Pulling latest code..."
+            git pull origin main
+
+            # Install dependencies
+            echo "[2/5] Installing dependencies..."
+            npm install --production
+
+            # Build project
+            echo "[3/5] Building project..."
+            npm run build
+
+            # Check if PM2 is installed, install if not
+            echo "[4/5] Checking PM2..."
+            pm2 --version || npm install -g pm2
+
+            # Restart or start app with PM2
+            echo "[5/5] Restarting app with PM2..."
+            pm2 describe your-app > nul 2>&1
+            if %errorlevel% == 0 (
+              pm2 restart your-app --update-env
+            ) else (
+              pm2 start npm --name "your-app" -- start
+            )
+
+            # Save PM2 process list
+            pm2 save
+
+            echo "=========================================="
+            echo "  Deployment Completed Successfully! ✅"
+            echo "=========================================="
+
+            # Show running processes
+            pm2 status
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ PM2 Deployment to 20.31.131.61 succeeded!"
+          else
+            echo "❌ PM2 Deployment to 20.31.131.61 failed!"
+          fi
