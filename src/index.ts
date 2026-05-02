@@ -32,7 +32,7 @@ async function startServer() {
       console.log(`Service ready on :${port}`)
     });
   } catch (error) {
-    console.error("Failed to connect to the database:", error);
+    console.error("Failed to connect to the database111:", error);
     process.exit(1);
   }
 }
